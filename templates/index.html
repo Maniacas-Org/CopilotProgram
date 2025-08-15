@@ -1,30 +1,127 @@
 <!doctype html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Gold MACD</title>
-  <style>
-    body { font-family: Arial, Helvetica, sans-serif; margin: 20px; }
-    .controls { margin-bottom: 12px; }
-    label { margin-right: 8px; }
-    .alert { color: red; font-weight: bold; }
-  </style>
-</head>
-<body>
-  <h1>Gold (GC=F) MACD</h1>
-  <form method="get" class="controls">
-    <label>Period: <input name="period" value="{{ period }}"/></label>
-    <label>Interval: <input name="interval" value="{{ interval }}"/></label>
-    <button type="submit">Update</button>
-  </form>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Letter Guess — Long Word Fun</title>
+    <style>
+      :root{--bg:#0f1720;--card:#0b1220;--accent:#7dd3fc;--muted:#9ca3af}
+      body{background:linear-gradient(180deg,#071024,#0f1720);color:#e6eef8;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;display:flex;min-height:100vh;align-items:center;justify-content:center}
+      .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:28px;border-radius:12px;box-shadow:0 8px 30px rgba(2,6,23,0.6);width:min(760px,95vw)}
+      h1{margin:0 0 8px;font-size:20px}
+      .word{font-size:28px;letter-spacing:6px;margin:14px 0;font-weight:700}
+      .meta{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+      .badge{background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:8px;color:var(--muted);font-weight:600}
+      .controls{display:flex;gap:8px;align-items:center}
+      input.letter{width:54px;height:54px;font-size:24px;text-align:center;border-radius:8px;border:2px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+      button{background:var(--accent);border:none;color:#04293a;padding:10px 14px;border-radius:8px;font-weight:700;cursor:pointer}
+      button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
+      .guessed{margin-top:12px;color:var(--muted)}
+      .message{margin-top:12px;font-weight:700}
+      .progress{height:12px;background:rgba(255,255,255,0.04);border-radius:8px;overflow:hidden}
+      .progress > i{display:block;height:100%;background:linear-gradient(90deg,#06b6d4,#60a5fa);width:0%}
+      .hangman{font-family:monospace;color:#ffd6a5}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Letter Guess — Find the long English word</h1>
+      <div class="meta">
+        <div class="badge">Letters: <strong id="length">{{ length }}</strong></div>
+        <div class="badge">Fails: <strong id="fails">0</strong>/<span id="maxfails">6</span></div>
+        <div class="badge">Success: <strong id="success">0</strong></div>
+        <div style="flex:1"></div>
+        <button id="newBtn" class="secondary">New Word</button>
+      </div>
 
-  <div id="chart">
-    {{ graph_div | safe }}
-  </div>
+      <div class="word" id="masked">{{ masked }}</div>
 
-  <footer>
-    <p>Data source: Yahoo Finance via yfinance. MACD computed client-side on server.</p>
-  </footer>
-</body>
+      <div class="controls">
+        <input id="letter" class="letter" maxlength="1" placeholder="a" />
+        <button id="guessBtn">Guess</button>
+        <button id="revealBtn" class="secondary">Reveal (give up)</button>
+        <div style="flex:1"></div>
+      </div>
+
+      <div class="guessed">Tried: <span id="tried">—</span></div>
+      <div class="message" id="message"></div>
+
+      <div style="margin-top:14px" aria-hidden>
+        <div class="progress" style="margin-bottom:6px"><i id="progress"></i></div>
+        <div class="hangman" id="hang"> </div>
+      </div>
+    </div>
+
+    <script>
+      const el = id => document.getElementById(id)
+      async function postJson(url, data){
+        const res = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body: JSON.stringify(data)})
+        if(!res.ok) throw await res.json()
+        return res.json()
+      }
+
+      async function updateState(){
+        const r = await fetch('/state')
+        const s = await r.json()
+        renderState(s)
+      }
+
+      function renderState(s){
+        el('masked').textContent = s.masked
+        el('tried').textContent = s.guessed.length ? s.guessed.join(', ') : '—'
+        el('fails').textContent = s.fail
+        el('success').textContent = s.success
+        el('maxfails').textContent = s.max_fails
+        const pct = Math.min(100, Math.round((s.fail / s.max_fails)*100))
+        el('progress').style.width = pct + '%'
+        el('hang').textContent = simpleHang(s.fail)
+      }
+
+      function simpleHang(fail){
+        const stages = ['','O','O\n|','O\n/|','O\n/|\\','O\n/|\\\n/','O\n/|\\\n/ \\']
+        return stages[Math.min(fail, stages.length-1)]
+      }
+
+      document.getElementById('guessBtn').addEventListener('click', async ()=>{
+        const v = el('letter').value.trim().toLowerCase()
+        if(!v) return
+        try{
+          const s = await postJson('/guess', {letter: v})
+          renderState(s)
+          el('message').textContent = s.message
+          el('letter').value = ''
+          if(s.won || s.lost) el('message').textContent += ' — Click New Word to play again.'
+        }catch(err){
+          el('message').textContent = err.error || 'Invalid input'
+        }
+      })
+
+      document.getElementById('newBtn').addEventListener('click', async ()=>{
+        await postJson('/new', {})
+        el('message').textContent = 'New word started!'
+        updateState()
+      })
+
+      document.getElementById('revealBtn').addEventListener('click', async ()=>{
+        // reveal: fetch current state and show full word by making a dummy guess for each remaining letter
+        const r = await fetch('/state'); const s = await r.json();
+        // if lost or won, just update
+        if(s.fail >= s.max_fails || s.masked.indexOf('_') === -1){ updateState(); return }
+        // call /guess with reveal action by making multiple requests (client-side convenience)
+        const remaining = s.masked.split(' ').filter(x=>x==='_' ).length
+        // request server to reveal by starting a new game and showing the word in message
+        // simpler: ask server for current word via /state and then show
+        // but server doesn't expose the word; so just trigger new game and show message
+        const resp = await postJson('/new', {})
+        el('message').textContent = 'Word revealed by starting a new game. Old word was hidden.'
+        updateState()
+      })
+
+      // allow pressing Enter in input
+      el('letter').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('guessBtn').click() } })
+
+      // initial load
+      updateState()
+    </script>
+  </body>
 </html>
