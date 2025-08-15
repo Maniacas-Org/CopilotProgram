@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Gold MACD</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 20px; }
+    .controls { margin-bottom: 12px; }
+    label { margin-right: 8px; }
+    .alert { color: red; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Gold (GC=F) MACD</h1>
+  <form method="get" class="controls">
+    <label>Period: <input name="period" value="{{ period }}"/></label>
+    <label>Interval: <input name="interval" value="{{ interval }}"/></label>
+    <button type="submit">Update</button>
+  </form>
+
+  <div id="chart">
+    {{ graph_div | safe }}
+  </div>
+
+  <footer>
+    <p>Data source: Yahoo Finance via yfinance. MACD computed client-side on server.</p>
+  </footer>
+</body>
+</html>
